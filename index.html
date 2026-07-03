@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NETPROBE — Domain to IP Checker</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0E13;
+    --panel:#10161D;
+    --panel-2:#141B23;
+    --line:#1F2934;
+    --text:#E7EDF3;
+    --muted:#6E7B8A;
+    --muted-2:#4A5563;
+    --signal:#5FE0B7;
+    --signal-dim:#2E5F51;
+    --warn:#F0A93E;
+    --err:#EF5B5B;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% 0%, rgba(95,224,183,0.05), transparent 40%),
+      linear-gradient(var(--line) 1px, transparent 1px) 0 0/100% 28px,
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:28px 20px 80px;}
+
+  /* HEADER */
+  header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:34px; flex-wrap:wrap; gap:16px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .dot{width:10px; height:10px; border-radius:50%; background:var(--signal); box-shadow:0 0 0 3px rgba(95,224,183,0.15); animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1} 50%{opacity:.4}}
+  .brand h1{font-family:var(--mono); font-size:17px; letter-spacing:0.14em; font-weight:600;}
+  .brand span{color:var(--muted);}
+  .backend-status{font-family:var(--mono); font-size:12px; padding:6px 12px; border-radius:6px; border:1px solid var(--line); display:flex; align-items:center; gap:6px;}
+  .backend-status .indicator{width:8px; height:8px; border-radius:50%; background:var(--err);}
+  .backend-status.connected .indicator{background:var(--signal);}
+
+  /* HERO / INPUT */
+  .hero{margin-bottom:30px;}
+  .hero h2{font-family:var(--mono); font-size:28px; font-weight:600; letter-spacing:-0.01em; margin-bottom:6px;}
+  .hero p{color:var(--muted); font-size:14px; max-width:520px; line-height:1.5;}
+
+  .probe-bar{
+    margin-top:22px; display:flex; gap:10px; background:var(--panel);
+    border:1px solid var(--line); border-radius:10px; padding:8px;
+  }
+  .probe-bar input{
+    flex:1; background:transparent; border:none; outline:none;
+    color:var(--text); font-family:var(--mono); font-size:15px; padding:10px 12px;
+  }
+  .probe-bar input::placeholder{color:var(--muted-2);}
+  .probe-bar button{
+    background:var(--signal); color:#06110D; border:none; border-radius:7px;
+    font-family:var(--mono); font-weight:600; font-size:13px; letter-spacing:0.04em;
+    padding:0 22px; cursor:pointer; transition:transform .12s ease, background .12s ease;
+  }
+  .probe-bar button:hover:not(:disabled){background:#7CF0CC;}
+  .probe-bar button:active{transform:scale(0.97);}
+  .probe-bar button:disabled{background:var(--muted-2); cursor:not-allowed; opacity:0.6;}
+
+  .hint{margin-top:8px; font-size:12px; color:var(--muted-2); font-family:var(--mono);}
+
+  /* MAIN GRID */
+  .grid{display:grid; grid-template-columns:340px 1fr; gap:18px; margin-top:26px;}
+  @media (max-width:820px){ .grid{grid-template-columns:1fr;} }
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .panel-head{
+    padding:12px 16px; border-bottom:1px solid var(--line);
+    font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .panel-head .status{font-size:10px; padding:2px 8px; border-radius:4px; border:1px solid var(--line);}
+
+  /* TERMINAL LOG */
+  .term{padding:14px 16px; font-family:var(--mono); font-size:12.5px; line-height:1.9; height:420px; overflow-y:auto;}
+  .term::-webkit-scrollbar{width:6px;}
+  .term::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+  .term-line{display:flex; gap:8px; opacity:0; animation:fadein .25s ease forwards;}
+  @keyframes fadein{to{opacity:1}}
+  .term-time{color:var(--muted-2); flex-shrink:0;}
+  .term-tag{flex-shrink:0; width:52px;}
+  .tag-ok{color:var(--signal);}
+  .tag-warn{color:var(--warn);}
+  .tag-err{color:var(--err);}
+  .tag-info{color:var(--muted);}
+  .term-msg{color:var(--text);}
+  .term-empty{color:var(--muted-2);}
+
+  /* RESULTS */
+  .results{padding:16px; display:flex; flex-direction:column; gap:12px; min-height:420px; overflow-y:auto;}
+  .results::-webkit-scrollbar{width:6px;}
+  .results::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+  .empty-state{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:var(--muted-2); font-family:var(--mono); font-size:12px; gap:8px; text-align:center; padding:40px 20px;
+  }
+  .empty-state .glyph{font-size:26px; opacity:.5;}
+
+  .section-title{font-family:var(--mono); font-size:10px; text-transform:uppercase; color:var(--muted); letter-spacing:0.1em; margin-top:8px; margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--line);}
+
+  .rec-group{border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:8px;}
+  .rec-group-head{
+    background:var(--panel-2); padding:9px 14px; font-family:var(--mono); font-size:11px;
+    letter-spacing:0.1em; color:var(--muted); display:flex; justify-content:space-between;
+  }
+  .rec-group-head b{color:var(--text);}
+  .rec-row{
+    padding:11px 14px; border-top:1px solid var(--line); display:flex; justify-content:space-between;
+    align-items:center; gap:12px; flex-wrap:wrap; font-family:var(--mono); font-size:13px;
+  }
+  .rec-val{color:var(--signal); font-weight:500; word-break:break-all;}
+  .rec-meta{color:var(--muted); font-size:11px; text-align:right;}
+
+  .geo-card{
+    border:1px solid var(--line); border-radius:8px; padding:14px; background:var(--panel-2);
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px; margin-bottom:8px;
+  }
+  .geo-card .ip{grid-column:1/-1; font-family:var(--mono); color:var(--signal); font-size:14px; font-weight:600; margin-bottom:2px;}
+  .geo-field label{display:block; font-size:10px; color:var(--muted-2); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:3px;}
+  .geo-field div{font-family:var(--mono); font-size:12.5px; color:var(--text);}
+
+  .reach-strip{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;}
+  .reach-pill{
+    font-family:var(--mono); font-size:11.5px; padding:7px 12px; border-radius:20px;
+    border:1px solid var(--line); display:flex; align-items:center; gap:7px; color:var(--muted);
+  }
+  .reach-pill .b{width:6px; height:6px; border-radius:50%; background:var(--muted-2);}
+  .reach-pill.up .b{background:var(--signal); box-shadow:0 0 6px var(--signal);}
+  .reach-pill.up{color:var(--text); border-color:var(--signal-dim);}
+  .reach-pill.down .b{background:var(--err);}
+  .reach-pill.down{color:var(--text); border-color:#5A2A2A;}
+
+  .error-box{background:#5A2A2A; border:1px solid var(--err); border-radius:8px; padding:12px; margin-bottom:8px; color:var(--err); font-size:13px;}
+
+  footer{margin-top:34px; font-family:var(--mono); font-size:11px; color:var(--muted-2); line-height:1.6;}
+  footer a{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="dot"></div>
+      <h1>NETPROBE <span>/ backend-powered domain checker</span></h1>
+    </div>
+    <div class="backend-status" id="backend-status">
+      <div class="indicator"></div>
+      <span id="backend-text">Connecting...</span>
+    </div>
+  </header>
+
+  <div class="hero">
+    <h2>Domain to IP — real-time, server-side.</h2>
+    <p>Backend server handle semua query: DNS resolve, geolocation, dan reachability checks dari sisi server — bukan cuma browser lu. Masukin domain, tekan RUN CHECK, tunggu hasil live.</p>
+
+    <div class="probe-bar">
+      <input id="domainInput" type="text" placeholder="contoh: google.com" autocomplete="off" spellcheck="false">
+      <button id="probeBtn" onclick="runProbe()" disabled>CONNECTING...</button>
+    </div>
+    <div class="hint">↳ backend query DNS, geolocation via ipwho.is &amp; ip-api.com, reachability checks concurrent.</div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-head">
+        <span>Live Log</span>
+        <span class="status" id="logStatus">IDLE</span>
+      </div>
+      <div class="term" id="term">
+        <div class="term-empty">Menunggu backend siap… terhubung ke server dulu.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span>Hasil</span>
+        <span class="status" id="resultStatus">—</span>
+      </div>
+      <div class="results" id="results">
+        <div class="empty-state">
+          <div class="glyph">◎</div>
+          <div>Belum ada hasil.<br>Hasil DNS, IP, geolocation, dan reachability bakal muncul di sini.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    NETPROBE Frontend — connect ke backend di http://localhost:5000 (atau sesuaikan di script).<br>
+    Backend query DNS dari server sendiri (support nameserver custom jika diperlukan), geolocation via public API, reachability checks concurrent.
+  </footer>
+
+</div>
+
+<script>
+const BACKEND_URL = 'http://localhost:5000'; // Ubah ke IP/domain backend jika remote
+
+const term = document.getElementById('term');
+const results = document.getElementById('results');
+const logStatus = document.getElementById('logStatus');
+const resultStatus = document.getElementById('resultStatus');
+const probeBtn = document.getElementById('probeBtn');
+const domainInput = document.getElementById('domainInput');
+const backendStatus = document.getElementById('backend-status');
+const backendText = document.getElementById('backend-text');
+
+domainInput.addEventListener('keydown', e => { if(e.key === 'Enter') runProbe(); });
+
+// Cek backend health saat load
+async function checkBackend() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/health`);
+    if(res.ok) {
+      backendStatus.classList.add('connected');
+      backendText.textContent = 'Backend online';
+      probeBtn.disabled = false;
+      probeBtn.textContent = 'RUN CHECK';
+      log('ok', 'Backend siap — ready to probe!');
+      return true;
+    }
+  } catch(e) {
+    log('err', `Backend offline: ${e.message}`);
+  }
+  backendStatus.classList.remove('connected');
+  backendText.textContent = 'Backend offline';
+  probeBtn.disabled = true;
+  probeBtn.textContent = 'BACKEND OFFLINE';
+  return false;
+}
+
+function pad(n){return n.toString().padStart(2,'0');}
+
+function log(tag, msg){
+  if(term.querySelector('.term-empty')) term.innerHTML = '';
+  const line = document.createElement('div');
+  line.className = 'term-line';
+  const time = new Date();
+  const tagClass = {ok:'tag-ok', warn:'tag-warn', err:'tag-err', info:'tag-info'}[tag] || 'tag-info';
+  const tagLabel = {ok:'OK', warn:'WARN', err:'ERR', info:'INFO'}[tag] || 'INFO';
+  line.innerHTML = `<span class="term-time">${pad(time.getHours())}:${pad(time.getMinutes())}:${pad(time.getSeconds())}</span><span class="term-tag ${tagClass}">${tagLabel}</span><span class="term-msg"></span>`;
+  line.querySelector('.term-msg').textContent = msg;
+  term.appendChild(line);
+  setTimeout(() => term.scrollTop = term.scrollHeight, 10);
+}
+
+function clearLog(){ term.innerHTML = ''; }
+function clearResults(){ results.innerHTML = ''; }
+
+function isValidDomain(d){
+  return /^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$/.test(d);
+}
+
+function renderRecordGroup(type, answers){
+  const group = document.createElement('div');
+  group.className = 'rec-group';
+  const filtered = (answers || []).filter(a => a.type === type);
+  group.innerHTML = `<div class="rec-group-head"><span>${type} RECORD</span><b>${filtered.length} ditemukan</b></div>`;
+  if(filtered.length === 0){
+    const row = document.createElement('div');
+    row.className = 'rec-row';
+    row.innerHTML = `<span style="color:var(--muted-2)">tidak ada ${type} record</span>`;
+    group.appendChild(row);
+  } else {
+    filtered.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'rec-row';
+      row.innerHTML = `<span class="rec-val">${a.data}</span><span class="rec-meta">TTL ${a.ttl}s</span>`;
+      group.appendChild(row);
+    });
+  }
+  return group;
+}
+
+function renderGeoCard(geoData){
+  const card = document.createElement('div');
+  card.className = 'geo-card';
+  
+  if(geoData.error) {
+    card.innerHTML = `<div class="ip">${geoData.ip}</div><div style="color:var(--muted-2); font-family:var(--mono); font-size:12px;">⚠ ${geoData.error}</div>`;
+    return card;
+  }
+  
+  const loc = geoData.city ? `${geoData.city}, ${geoData.country || '?'}` : (geoData.country || '—');
+  card.innerHTML = `
+    <div class="ip">${geoData.ip}</div>
+    <div class="geo-field"><label>Lokasi</label><div>${loc}</div></div>
+    <div class="geo-field"><label>ISP</label><div>${geoData.isp || '—'}</div></div>
+    <div class="geo-field"><label>Org</label><div>${geoData.org || '—'}</div></div>
+    <div class="geo-field"><label>Timezone</label><div>${geoData.timezone || '—'}</div></div>
+  `;
+  return card;
+}
+
+async function runProbe(){
+  const raw = domainInput.value.trim().toLowerCase().replace(/^https?:\/\//,'').replace(/\/.*$/,'');
+  if(!raw){ domainInput.focus(); return; }
+  if(!isValidDomain(raw)){
+    clearLog();
+    log('err', `"${raw}" bukan format domain yang valid.`);
+    return;
+  }
+
+  probeBtn.disabled = true;
+  probeBtn.textContent = 'RUNNING…';
+  logStatus.textContent = 'RUNNING';
+  logStatus.style.color = 'var(--warn)';
+  resultStatus.textContent = 'MENUNGGU';
+  clearLog();
+  clearResults();
+
+  log('info', `Menghubungi backend untuk probe ${raw}…`);
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/probe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: raw })
+    });
+
+    if(!res.ok) {
+      const err = await res.json();
+      log('err', `Backend error: ${err.error || 'Unknown error'}`);
+      probeBtn.disabled = false;
+      probeBtn.textContent = 'RUN CHECK';
+      return;
+    }
+
+    const data = await res.json();
+    log('ok', `Backend respond — processing results…`);
+
+    // DNS Records
+    const recPanel = document.createElement('div');
+    recPanel.innerHTML = '<div class="section-title">DNS Records</div>';
+    ['A', 'AAAA', 'CNAME', 'MX', 'NS', 'TXT', 'SOA'].forEach(type => {
+      if(data.records[type]) recPanel.appendChild(renderRecordGroup(type, data.records[type]));
+    });
+    results.appendChild(recPanel);
+
+    // Geolocation
+    if(data.ips && data.ips.length > 0){
+      log('ok', `${data.ips.length} IP ditemukan — geolocation…`);
+      const geoPanel = document.createElement('div');
+      geoPanel.innerHTML = `<div class="section-title">Geolocation (${data.ips.length} IP)</div>`;
+      Object.values(data.geolocation).forEach(geo => {
+        geoPanel.appendChild(renderGeoCard(geo));
+      });
+      results.appendChild(geoPanel);
+    } else {
+      log('warn', 'Tidak ada IP untuk di-geolocate.');
+    }
+
+    // Reachability
+    if(data.reachability && data.reachability.length > 0){
+      log('ok', `Reachability checks — ${data.reachability.length} endpoint tested`);
+      const reachPanel = document.createElement('div');
+      reachPanel.innerHTML = '<div class="section-title">Reachability</div>';
+      const strip = document.createElement('div');
+      strip.className = 'reach-strip';
+      data.reachability.forEach(r => {
+        const pill = document.createElement('div');
+        pill.className = 'reach-pill ' + (r.up ? 'up' : 'down');
+        const detail = r.up ? `${r.status_code} · ${r.ms}ms` : r.error;
+        pill.innerHTML = `<span class="b"></span>${r.scheme} — ${r.up ? '✓ up' : '✗ down'} (${detail})`;
+        strip.appendChild(pill);
+      });
+      reachPanel.appendChild(strip);
+      results.appendChild(reachPanel);
+    }
+
+    log('ok', `Probe selesai untuk ${raw}.`);
+    logStatus.textContent = 'SELESAI';
+    logStatus.style.color = 'var(--signal)';
+    resultStatus.textContent = raw.toUpperCase();
+  } catch(e) {
+    log('err', `Connection error: ${e.message}`);
+    const errorBox = document.createElement('div');
+    errorBox.className = 'error-box';
+    errorBox.textContent = `Backend not reachable: ${e.message}. Pastikan backend running di ${BACKEND_URL}`;
+    results.innerHTML = '';
+    results.appendChild(errorBox);
+  } finally {
+    probeBtn.disabled = false;
+    probeBtn.textContent = 'RUN CHECK';
+  }
+}
+
+// Check backend saat page load
+window.addEventListener('load', checkBackend);
+setInterval(checkBackend, 30000); // Re-check setiap 30s
+</script>
+</body>
+</html>
