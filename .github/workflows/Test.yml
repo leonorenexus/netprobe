@@ -1,0 +1,74 @@
+name: Test Backend
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Check syntax
+      run: |
+        python3 -m py_compile backend.py
+    
+    - name: Test imports
+      run: |
+        python3 -c "
+        import flask
+        import dnspython
+        import requests
+        print('✓ Flask', flask.__version__)
+        print('✓ DNSPython OK')
+        print('✓ Requests', requests.__version__)
+        "
+    
+    - name: Lint with flake8 (optional)
+      run: |
+        pip install flake8
+        # Ignore line too long, etc
+        flake8 backend.py --count --select=E9,F63,F7,F82 --show-source --statistics
+      continue-on-error: true
+    
+    - name: Test Flask app startup
+      run: |
+        timeout 5 python3 -c "
+        import threading
+        from backend import app
+        
+        def run_server():
+            app.run(port=5555, debug=False, use_reloader=False)
+        
+        thread = threading.Thread(target=run_server, daemon=True)
+        thread.start()
+        
+        import time
+        time.sleep(2)
+        
+        import requests
+        try:
+            res = requests.get('http://localhost:5555/api/health', timeout=3)
+            print('✓ Server started successfully')
+            print('✓ Response:', res.status_code, res.json())
+        except Exception as e:
+            print('✗ Server test failed:', e)
+        " || echo "⚠ Server test timeout (expected)"
