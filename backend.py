@@ -9,7 +9,7 @@ Usage:
 
 API Endpoints:
     POST /api/probe
-        body: {"domain": "example.com"}
+        body: {"domain": "https://leonorenexus.github.io/netprobe/"}
         returns: {records: {...}, ips: [...], geolocation: {...}, reachability: {...}}
 """
 
